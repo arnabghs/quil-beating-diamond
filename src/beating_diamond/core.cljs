@@ -2,50 +2,70 @@
   (:require [quil.core :as q :include-macros true]
             [quil.middleware :as m]))
 
+
+(def sum-of (partial mapv +))
+
+(defn top-right-diag [x] (for [i (range 0 (inc x))] [i (- i x)]))
+
+(defn top-left-diag [x] (for [i (range 0 (inc x))] [(- i) (- i x)]))
+
+(defn bot-left-diag [x] (for [i (range x -1 -1)] [(- i x) i]))
+
+(defn bot-right-diag [x] (for [i (range x -1 -1)] [(- x i) i]))
+:sizes
+(def all-diags (juxt top-left-diag top-right-diag bot-left-diag bot-right-diag))
+
+(defn diags-from-center [center x]
+  (mapv (partial sum-of center) (into #{} cat (all-diags x))))
+
+
 (defn setup []
-  ; Set frame rate to 30 frames per second.
-  (q/frame-rate 30)
-  ; Set color mode to HSB (HSV) instead of default RGB.
-  (q/color-mode :hsb)
-  ; setup function returns initial state. It contains
-  ; circle color and position.
-  {:color 0
-   :angle 0})
+  (q/frame-rate 5)
+  (q/color-mode :rgb)
+  {:sizes     (range 13 0 -3)
+   :tile-size 10
+   :modifier  0
+   :modifiers [inc dec]})
 
 (defn update-state [state]
-  ; Update sketch state by changing circle color and position.
-  {:color (mod (+ (:color state) 0.7) 255)
-   :angle (+ (:angle state) 0.1)})
+  (let [first-size (first (state :sizes))
+        sec-mod (second (:modifiers state))
+        first-mod (first (:modifiers state))]
+    (if (or (zero? first-size) (>= first-size 25))
+      (-> state
+          (update :modifiers reverse)
+          (update :sizes (partial map sec-mod)))
+      (update state :sizes (partial map first-mod)))))
 
-(defn draw-state [state]
-  ; Clear the sketch by filling it with light-grey color.
+(defn draw-diamond [size tile-size]
+  (let [coords (diags-from-center [(/ (q/width) tile-size 2)
+                                   (/ (q/height) tile-size 2)] size)]
+    (doseq [[x y] coords]
+      (apply q/fill [0 0 0])
+      (q/no-stroke)
+      (q/rect (* y tile-size) (* x tile-size) tile-size tile-size))))
+
+
+
+(defn draw-state [{:keys [sizes tile-size]}]
   (q/background 240)
-  ; Set circle color.
-  (q/fill (:color state) 255 255)
-  ; Calculate x and y coordinates of the circle.
-  (let [angle (:angle state)
-        x (* 150 (q/cos angle))
-        y (* 150 (q/sin angle))]
-    ; Move origin point to the center of the sketch.
-    (q/with-translation [(/ (q/width) 2)
-                         (/ (q/height) 2)]
-      ; Draw the circle.
-      (q/ellipse x y 100 100))))
+  (doseq [size sizes]
+    (draw-diamond size tile-size)))
 
 ; this function is called in index.html
 (defn ^:export run-sketch []
   (q/defsketch beating-diamond
-    :host "beating-diamond"
-    :size [500 500]
-    ; setup function called only once, during sketch initialization.
-    :setup setup
-    ; update-state is called on each iteration before draw-state.
-    :update update-state
-    :draw draw-state
-    ; This sketch uses functional-mode middleware.
-    ; Check quil wiki for more info about middlewares and particularly
-    ; fun-mode.
-    :middleware [m/fun-mode]))
+               :host "beating-diamond"
+               :size [500 500]
+               ; setup function called only once, during sketch initialization.
+               :setup setup
+               ; update-state is called on each iteration before draw-state.
+               :update update-state
+               :draw draw-state
+               ; This sketch uses functional-mode middleware.
+               ; Check quil wiki for more info about middlewares and particularly
+               ; fun-mode.
+               :middleware [m/fun-mode]))
 
 ; uncomment this line to reset the sketch:
 ; (run-sketch)
